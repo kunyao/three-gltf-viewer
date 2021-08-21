@@ -89,8 +89,14 @@ export class Viewer {
       directIntensity: 0.8 * Math.PI, // TODO(#116)
       directColor: 0xFFFFFF,
       bgColor1: '#ffffff',
-      bgColor2: '#353535'
+      bgColor2: '#353535',
+
+      // Key shape
+      currentFrame: 0,
+      playKeyshape: true
     };
+
+    this.lastFrame = 0;
 
     this.prevTime = 0;
 
@@ -153,16 +159,38 @@ export class Viewer {
 
   animate (time) {
 
-    requestAnimationFrame( this.animate );
+    // requestAnimationFrame( this.animate );
+    setTimeout(() => {
+      requestAnimationFrame(this.animate);
+    }, 1000 / 10);
 
     const dt = (time - this.prevTime) / 1000;
 
     this.controls.update();
     this.stats.update();
     this.mixer && this.mixer.update(dt);
+
+    // Keyshape animation
+    this.alterKeyshape();
     this.render();
 
     this.prevTime = time;
+
+  }
+
+  alterKeyshape () {
+    if (this.morphMeshes) {
+      this.morphMeshes.forEach((mesh) => {
+        if (this.state.currentFrame == mesh.morphTargetInfluences.length) {
+          this.state.currentFrame = 0;
+        }
+        mesh.morphTargetInfluences[this.lastFrame] = 0;
+        mesh.morphTargetInfluences[this.state.currentFrame] = 1;
+
+        this.lastFrame = this.state.currentFrame;
+        if (this.state.playKeyshape) this.state.currentFrame++;
+      });
+    }
 
   }
 
@@ -612,6 +640,10 @@ export class Viewer {
     this.morphFolder = gui.addFolder('Morph Targets');
     this.morphFolder.domElement.style.display = 'none';
 
+    // Keyshape animation controls.
+    this.keyshapeFolder = gui.addFolder('KeyShape Animation');
+    this.keyshapeFolder.domElement.style.display = 'none';
+
     // Camera controls.
     this.cameraFolder = gui.addFolder('Cameras');
     this.cameraFolder.domElement.style.display = 'none';
@@ -644,10 +676,10 @@ export class Viewer {
     this.animFolder.domElement.style.display = 'none';
 
     const cameraNames = [];
-    const morphMeshes = [];
+    this.morphMeshes = [];
     this.content.traverse((node) => {
       if (node.isMesh && node.morphTargetInfluences) {
-        morphMeshes.push(node);
+        this.morphMeshes.push(node);
       }
       if (node.isCamera) {
         node.name = node.name || `VIEWER__camera_${cameraNames.length + 1}`;
@@ -663,20 +695,27 @@ export class Viewer {
       this.cameraCtrl.onChange((name) => this.setCamera(name));
     }
 
-    if (morphMeshes.length) {
-      this.morphFolder.domElement.style.display = '';
-      morphMeshes.forEach((mesh) => {
-        if (mesh.morphTargetInfluences.length) {
-          const nameCtrl = this.morphFolder.add({name: mesh.name || 'Untitled'}, 'name');
-          this.morphCtrls.push(nameCtrl);
-        }
-        for (let i = 0; i < mesh.morphTargetInfluences.length; i++) {
-          const ctrl = this.morphFolder.add(mesh.morphTargetInfluences, i, 0, 1, 0.01).listen();
-          Object.keys(mesh.morphTargetDictionary).forEach((key) => {
-            if (key && mesh.morphTargetDictionary[key] === i) ctrl.name(key);
-          });
-          this.morphCtrls.push(ctrl);
-        }
+    // if (this.morphMeshes.length) {
+    //   this.morphFolder.domElement.style.display = '';
+    //   this.morphMeshes.forEach((mesh) => {
+    //     if (mesh.morphTargetInfluences.length) {
+    //       const nameCtrl = this.morphFolder.add({name: mesh.name || 'Untitled'}, 'name');
+    //       this.morphCtrls.push(nameCtrl);
+    //     }
+    //     for (let i = 0; i < mesh.morphTargetInfluences.length; i++) {
+    //       const ctrl = this.morphFolder.add(mesh.morphTargetInfluences, i, 0, 1, 0.01).listen();
+    //       Object.keys(mesh.morphTargetDictionary).forEach((key) => {
+    //         if (key && mesh.morphTargetDictionary[key] === i) ctrl.name(key);
+    //       });
+    //       this.morphCtrls.push(ctrl);
+    //     }
+    //   });
+    // }
+    if (this.morphMeshes.length) {
+      this.keyshapeFolder.domElement.style.display = '';
+      this.morphMeshes.forEach((mesh) => {
+        this.keyshapeFolder.add(this.state, 'playKeyshape');
+        this.keyshapeFolder.add(this.state, 'currentFrame', 0, mesh.morphTargetInfluences.length-1, 1).listen();
       });
     }
 
